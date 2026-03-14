@@ -3,7 +3,7 @@
     <div class="container">
       <div class="logo">
         <span class="logo-icon">🎁</span>
-        <span class="logo-text">字字插件兑换码</span>
+        <span class="logo-text">字字插件效率工具</span>
       </div>
       <div class="header-right">
         <span class="auto-badge">⚡ 自动发货</span>

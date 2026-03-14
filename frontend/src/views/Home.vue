@@ -51,7 +51,7 @@
     <!-- 页面底部 -->
     <footer class="footer">
       <div class="container">
-        <p>© 2024 字字插件兑换码自动发货平台 版权所有</p>
+        <p>© 2024 效率工具 版权所有</p>
         <p class="disclaimer">本站为第三方服务，非官方平台。如有疑问请联系客服。</p>
       </div>
     </footer>
