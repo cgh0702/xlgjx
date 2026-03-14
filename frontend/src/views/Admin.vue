@@ -537,9 +537,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
-
-const api = axios.create({ baseURL: '/api' })
+import api from '../api/index.js'
 
 // 当前标签页
 const activeTab = ref('products')

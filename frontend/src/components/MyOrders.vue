@@ -34,9 +34,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
-
-const api = axios.create({ baseURL: '/api' })
+import api from '../api/index.js'
 
 const props = defineProps({
   visible: Boolean,
