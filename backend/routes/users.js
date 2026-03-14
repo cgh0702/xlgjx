@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../models/database');
+const svgCaptcha = require('svg-captcha');
 
 // 简单的密码加密（生产环境应使用bcrypt）
 const crypto = require('crypto');
@@ -8,10 +9,117 @@ const hashPassword = (password) => {
   return crypto.createHash('sha256').update(password).digest('hex');
 };
 
+// 验证码存储（生产环境应使用Redis）
+const captchaStore = new Map();
+
+// IP注册频率限制（生产环境应使用Redis）
+const ipRegisterStore = new Map();
+const IP_REGISTER_LIMIT = 5; // 每小时最多注册次数
+const IP_REGISTER_WINDOW = 60 * 60 * 1000; // 1小时窗口（毫秒）
+
+// 检查IP注册次数
+const checkIpLimit = (ip) => {
+  const now = Date.now();
+  const record = ipRegisterStore.get(ip);
+
+  if (!record) {
+    return { allowed: true, remaining: IP_REGISTER_LIMIT };
+  }
+
+  // 过滤掉过期的注册记录
+  const validTimestamps = record.timestamps.filter(t => now - t < IP_REGISTER_WINDOW);
+
+  if (validTimestamps.length >= IP_REGISTER_LIMIT) {
+    const oldestTimestamp = validTimestamps[0];
+    const resetTime = Math.ceil((oldestTimestamp + IP_REGISTER_WINDOW - now) / 60000);
+    return { allowed: false, resetMinutes: resetTime };
+  }
+
+  return { allowed: true, remaining: IP_REGISTER_LIMIT - validTimestamps.length };
+};
+
+// 记录IP注册
+const recordIpRegister = (ip) => {
+  const now = Date.now();
+  const record = ipRegisterStore.get(ip);
+
+  if (!record) {
+    ipRegisterStore.set(ip, { timestamps: [now] });
+  } else {
+    // 过滤掉过期的注册记录
+    record.timestamps = record.timestamps.filter(t => now - t < IP_REGISTER_WINDOW);
+    record.timestamps.push(now);
+  }
+};
+
+// 清理过期IP记录（每小时执行一次）
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of ipRegisterStore) {
+    record.timestamps = record.timestamps.filter(t => now - t < IP_REGISTER_WINDOW);
+    if (record.timestamps.length === 0) {
+      ipRegisterStore.delete(ip);
+    }
+  }
+}, 60 * 60 * 1000);
+
+// 生成验证码
+router.get('/captcha', (req, res) => {
+  const captcha = svgCaptcha.create({
+    size: 4,
+    noise: 2,
+    color: true,
+    background: '#f0f0f0'
+  });
+
+  const captchaId = Date.now().toString() + Math.random().toString(36).substring(2);
+  captchaStore.set(captchaId, captcha.text.toLowerCase());
+
+  // 5分钟后过期
+  setTimeout(() => captchaStore.delete(captchaId), 5 * 60 * 1000);
+
+  res.json({
+    success: true,
+    data: {
+      captchaId,
+      captchaSvg: captcha.data
+    }
+  });
+});
+
 // 注册
 router.post('/register', (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, captchaId, captchaCode } = req.body;
+
+    // 获取客户端IP
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+
+    // 检查IP注册频率
+    const ipCheck = checkIpLimit(clientIp);
+    if (!ipCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: `注册过于频繁，请 ${ipCheck.resetMinutes} 分钟后再试`
+      });
+    }
+
+    // 验证码校验
+    if (!captchaId || !captchaCode) {
+      return res.status(400).json({ success: false, message: '请输入验证码' });
+    }
+
+    const storedCode = captchaStore.get(captchaId);
+    if (!storedCode) {
+      return res.status(400).json({ success: false, message: '验证码已过期，请重新获取' });
+    }
+
+    if (storedCode !== captchaCode.toLowerCase()) {
+      return res.status(400).json({ success: false, message: '验证码错误' });
+    }
+
+    // 验证成功后删除验证码
+    captchaStore.delete(captchaId);
 
     if (!username || !password) {
       return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
@@ -34,6 +142,9 @@ router.post('/register', (req, res) => {
     // 创建用户（存储加密密码和明文密码）
     const hashedPassword = hashPassword(password);
     const result = db.prepare('INSERT INTO users (username, password, plain_password) VALUES (?, ?, ?)').run(username, hashedPassword, password);
+
+    // 记录IP注册
+    recordIpRegister(clientIp);
 
     res.json({
       success: true,
