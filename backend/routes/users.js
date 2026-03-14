@@ -3,6 +3,10 @@ const router = express.Router();
 const { db } = require('../models/database');
 const svgCaptcha = require('svg-captcha');
 
+// 管理员账号（写死，不可删除）
+const ADMIN_USERNAME = '15802011996';
+const ADMIN_PASSWORD = '84455999aA*';
+
 // 简单的密码加密（生产环境应使用bcrypt）
 const crypto = require('crypto');
 const hashPassword = (password) => {
@@ -133,6 +137,11 @@ router.post('/register', (req, res) => {
       return res.status(400).json({ success: false, message: '密码至少6个字符' });
     }
 
+    // 禁止注册管理员账号
+    if (username === ADMIN_USERNAME) {
+      return res.status(400).json({ success: false, message: '该用户名不可使用' });
+    }
+
     // 检查用户名是否已存在
     const existingUser = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     if (existingUser) {
@@ -169,6 +178,19 @@ router.post('/login', (req, res) => {
       return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
     }
 
+    // 检查是否是管理员账号
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      return res.json({
+        success: true,
+        message: '登录成功',
+        data: {
+          id: 0, // 管理员使用特殊ID
+          username: ADMIN_USERNAME,
+          isAdmin: true
+        }
+      });
+    }
+
     // 查找用户
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     if (!user) {
@@ -186,7 +208,8 @@ router.post('/login', (req, res) => {
       message: '登录成功',
       data: {
         id: user.id,
-        username: user.username
+        username: user.username,
+        isAdmin: false
       }
     });
   } catch (error) {

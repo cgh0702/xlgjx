@@ -35,6 +35,25 @@
         </div>
       </div>
 
+      <!-- 验证码 -->
+      <div class="captcha-section">
+        <div class="captcha-row">
+          <el-input
+            v-model="captchaCode"
+            placeholder="请输入验证码"
+            prefix-icon="Key"
+            size="large"
+            style="flex: 1"
+          />
+          <div
+            class="captcha-img"
+            v-html="captchaSvg"
+            @click="fetchCaptcha"
+            title="点击刷新验证码"
+          ></div>
+        </div>
+      </div>
+
       <!-- 倒计时 -->
       <div class="countdown" v-if="countdown > 0">
         支付剩余时间：{{ formatTime(countdown) }}
@@ -56,6 +75,7 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { mockPay, getOrder, cancelOrder } from '../api'
 import { ElMessage } from 'element-plus'
+import api from '../api/index.js'
 
 const props = defineProps({
   visible: Boolean,
@@ -69,6 +89,25 @@ const loading = ref(false)
 const countdown = ref(900) // 15分钟
 let timer = null
 
+// 验证码相关
+const captchaCode = ref('')
+const captchaSvg = ref('')
+const captchaId = ref('')
+
+// 获取验证码
+const fetchCaptcha = async () => {
+  try {
+    const { data } = await api.get('/users/captcha')
+    if (data.success) {
+      captchaSvg.value = data.data.captchaSvg
+      captchaId.value = data.data.captchaId
+      captchaCode.value = ''
+    }
+  } catch (error) {
+    console.error('获取验证码失败:', error)
+  }
+}
+
 // 格式化时间
 const formatTime = (seconds) => {
   const min = Math.floor(seconds / 60)
@@ -80,6 +119,8 @@ const formatTime = (seconds) => {
 watch(() => props.visible, (val) => {
   if (val) {
     countdown.value = 900
+    captchaCode.value = ''
+    fetchCaptcha() // 打开弹窗时获取验证码
     timer = setInterval(() => {
       countdown.value--
       if (countdown.value <= 0) {
@@ -116,6 +157,12 @@ const handleCancel = async () => {
 
 // 模拟支付
 const handlePay = async () => {
+  // 验证验证码
+  if (!captchaCode.value) {
+    ElMessage.warning('请输入验证码')
+    return
+  }
+
   loading.value = true
   try {
     // 模拟支付延迟
@@ -129,9 +176,11 @@ const handlePay = async () => {
       emit('success', orderData.data)
     } else {
       ElMessage.error(data.message || '支付失败')
+      fetchCaptcha() // 支付失败刷新验证码
     }
   } catch (error) {
     ElMessage.error('支付失败，请重试')
+    fetchCaptcha() // 支付失败刷新验证码
   } finally {
     loading.value = false
   }
@@ -220,6 +269,39 @@ const handlePay = async () => {
   text-align: center;
   font-size: 14px;
   color: #FF7D00;
+}
+
+.captcha-section {
+  margin-bottom: 16px;
+}
+
+.captcha-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.captcha-img {
+  width: 120px;
+  height: 40px;
+  cursor: pointer;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  flex-shrink: 0;
+}
+
+.captcha-img:hover {
+  border-color: #1677FF;
+}
+
+.captcha-img :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 .dialog-footer {

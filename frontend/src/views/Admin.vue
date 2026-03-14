@@ -691,7 +691,8 @@ const deleteProduct = async (row) => {
     }
   } catch (e) {
     if (e !== 'cancel') {
-      ElMessage.error('删除失败')
+      const message = e.response?.data?.message || '删除失败'
+      ElMessage.error(message)
     }
   }
 }
@@ -1171,6 +1172,26 @@ const revokeCode = async (row) => {
 
 // 初始化
 onMounted(() => {
+  // 检查管理员权限
+  const savedUser = localStorage.getItem('user')
+  if (!savedUser) {
+    ElMessage.warning('请先登录管理员账号')
+    window.location.href = '/'
+    return
+  }
+  try {
+    const user = JSON.parse(savedUser)
+    if (!user.isAdmin) {
+      ElMessage.warning('您没有管理员权限')
+      window.location.href = '/'
+      return
+    }
+  } catch (e) {
+    ElMessage.warning('请先登录管理员账号')
+    window.location.href = '/'
+    return
+  }
+
   loadStats()
   loadCodes()
   loadOrders()

@@ -113,19 +113,19 @@ router.delete('/products/:id', (req, res) => {
   try {
     const { id } = req.params;
 
-    // 检查是否有未使用的兑换码
-    const unusedCodes = db.prepare("SELECT COUNT(*) as count FROM codes WHERE product_id = ? AND status = 'available'").get(id);
-    if (unusedCodes.count > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `该商品还有 ${unusedCodes.count} 个未使用的兑换码，请先删除兑换码`
-      });
-    }
+    // 统计要删除的兑换码数量
+    const codesCount = db.prepare('SELECT COUNT(*) as count FROM codes WHERE product_id = ?').get(id);
+
+    // 删除商品关联的兑换码
+    db.prepare('DELETE FROM codes WHERE product_id = ?').run(id);
 
     // 删除商品
     db.prepare('DELETE FROM products WHERE id = ?').run(id);
 
-    res.json({ success: true, message: '商品删除成功' });
+    res.json({
+      success: true,
+      message: `商品删除成功，同时删除了 ${codesCount.count} 个兑换码`
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: '删除商品失败' });
   }
@@ -573,6 +573,9 @@ router.get('/users', (req, res) => {
   }
 });
 
+// 管理员账号（写死，不可删除）
+const ADMIN_USERNAME = '15802011996';
+
 // 删除用户
 router.delete('/users/:id', (req, res) => {
   try {
@@ -582,6 +585,11 @@ router.delete('/users/:id', (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
     if (!user) {
       return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+
+    // 禁止删除管理员账号
+    if (user.username === ADMIN_USERNAME) {
+      return res.status(400).json({ success: false, message: '管理员账号不可删除' });
     }
 
     // 检查用户是否有已支付订单

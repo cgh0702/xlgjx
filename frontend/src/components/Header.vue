@@ -20,7 +20,8 @@
           <a href="#" class="service-link logout" @click.prevent="$emit('logout')">退出</a>
         </template>
 
-        <a href="?admin" class="service-link">后台管理</a>
+        <!-- 只有管理员才显示后台管理按钮 -->
+        <a v-if="user?.isAdmin" href="?admin" class="service-link">后台管理</a>
       </div>
     </div>
   </header>
